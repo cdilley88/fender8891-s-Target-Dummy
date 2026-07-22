@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "PPP",
+    "GAR",
+    "PPP"
+  ],
+  "key": {
+    "P": { "item": "minecraft:paper" },
+    "G": { "item": "minecraft:glass" },
+    "A": { "item": "minecraft:armor_stand" },
+    "R": { "item": "minecraft:redstone_block" }
+  },
+  "result": { "id": "fender8891_target_dummy:target_dummy", "count": 1 }
+}
