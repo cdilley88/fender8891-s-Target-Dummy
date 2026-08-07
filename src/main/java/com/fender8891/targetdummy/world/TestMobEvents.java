@@ -1,11 +1,18 @@
 package com.fender8891.targetdummy.world;
 
+import com.fender8891.targetdummy.entity.DummyMobCatalog;
 import com.fender8891.targetdummy.entity.TargetDummy;
+import com.fender8891.targetdummy.registry.ModRegistries;
 import java.util.UUID;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.MobDespawnEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingExperienceDropEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -41,6 +48,38 @@ public final class TestMobEvents {
         UUID controllerId = event.getTarget().getPersistentData().getUUID(CONTROLLER_KEY);
         if (level.getEntity(controllerId) instanceof TargetDummy controller) {
             controller.interactThroughProxy(player);
+            return;
+        }
+        recoverOrphanedProxy(level, player, event.getTarget());
+    }
+
+    private static void recoverOrphanedProxy(ServerLevel level, ServerPlayer player, Entity proxy) {
+        ResourceLocation mobKey = BuiltInRegistries.ENTITY_TYPE.getKey(proxy.getType());
+        String mobId = mobKey.toString();
+        int mode = DummyMobCatalog.HOSTILE.contains(mobId) ? DummyMobCatalog.HOSTILE_MOBS
+                : DummyMobCatalog.PASSIVE.contains(mobId) ? DummyMobCatalog.PASSIVE_MOBS : -1;
+        if (mode < 0) {
+            proxy.discard();
+            return;
+        }
+        TargetDummy controller = ModRegistries.TARGET_DUMMY_ENTITY.get().create(level);
+        if (controller == null) return;
+        controller.moveTo(proxy.getX(), proxy.getY(), proxy.getZ(), proxy.getYRot(), 0.0F);
+        controller.setModelMode(mode);
+        controller.setSelectedMob(mobId);
+        if (!level.addFreshEntity(controller)) return;
+        proxy.discard();
+        controller.interactThroughProxy(player);
+    }
+
+    public static void onMobDespawn(MobDespawnEvent event) {
+        if (isTestMob(event.getEntity())) event.setResult(MobDespawnEvent.Result.DENY);
+    }
+
+    public static void onIncomingDamage(LivingIncomingDamageEvent event) {
+        if (isTestMob(event.getEntity()) && event.getSource().is(DamageTypeTags.IS_FIRE)
+                && event.getSource().getEntity() == null) {
+            event.setCanceled(true);
         }
     }
 

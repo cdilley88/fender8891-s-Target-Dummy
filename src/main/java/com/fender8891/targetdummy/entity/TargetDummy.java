@@ -54,6 +54,7 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
     private static final EntityDataAccessor<Boolean> INFO_CARD_ENABLED = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> LOADOUT_INDEX = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> MODEL_MODE = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> FACING = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<String> PASSIVE_MOB = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> HOSTILE_MOB = SynchedEntityData.defineId(TargetDummy.class, EntityDataSerializers.STRING);
 
@@ -61,6 +62,7 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
     @Nullable private UUID proxyUuid;
     private int respawnTicks;
     private int missingProxyTicks;
+    private boolean waitingForDeathRemoval;
 
     public TargetDummy(EntityType<? extends TargetDummy> type, Level level) {
         super(type, level);
@@ -89,6 +91,7 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         builder.define(INFO_CARD_ENABLED, true);
         builder.define(LOADOUT_INDEX, CUSTOM_LOADOUT);
         builder.define(MODEL_MODE, DummyMobCatalog.IMMORTAL_STEVE);
+        builder.define(FACING, 0);
         builder.define(PASSIVE_MOB, DummyMobCatalog.defaultSelection(DummyMobCatalog.PASSIVE_MOBS));
         builder.define(HOSTILE_MOB, DummyMobCatalog.defaultSelection(DummyMobCatalog.HOSTILE_MOBS));
     }
@@ -108,14 +111,33 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
     private void maintainTestMob() {
         if (!(level() instanceof ServerLevel serverLevel)) return;
         Entity current = proxyUuid == null ? null : serverLevel.getEntity(proxyUuid);
-        if (current instanceof Mob mob) {
+        List<Mob> linkedMobs = serverLevel.getEntitiesOfClass(Mob.class, getBoundingBox().inflate(4.0D),
+                mob -> mob.getPersistentData().hasUUID(TestMobEvents.CONTROLLER_KEY)
+                        && getUUID().equals(mob.getPersistentData().getUUID(TestMobEvents.CONTROLLER_KEY)));
+        Mob activeMob = current instanceof Mob mob && mob.isAlive() && linkedMobs.contains(mob)
+                ? mob
+                : linkedMobs.stream().filter(Entity::isAlive).findFirst().orElse(null);
+        if (activeMob != null) {
+            proxyUuid = activeMob.getUUID();
             missingProxyTicks = 0;
-            if (!mob.isAlive()) {
-                proxyUuid = null;
-                respawnTicks = RESPAWN_DELAY_TICKS;
-                return;
+            waitingForDeathRemoval = false;
+            for (Mob duplicate : linkedMobs) {
+                if (duplicate != activeMob) duplicate.discard();
             }
-            mob.setNoAi(true);
+            anchorTestMob(activeMob);
+            return;
+        }
+        Mob dyingMob = linkedMobs.stream().filter(mob -> !mob.isAlive()).findFirst().orElse(null);
+        if (dyingMob != null) {
+            proxyUuid = dyingMob.getUUID();
+            missingProxyTicks = 0;
+            waitingForDeathRemoval = true;
+            return;
+        }
+        if (waitingForDeathRemoval) {
+            waitingForDeathRemoval = false;
+            proxyUuid = null;
+            respawnTicks = RESPAWN_DELAY_TICKS;
             return;
         }
         if (proxyUuid != null && missingProxyTicks++ < RESPAWN_DELAY_TICKS) return;
@@ -136,11 +158,25 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         if (!(created instanceof Mob mob)) return;
         mob.moveTo(getX(), getY(), getZ(), getYRot(), 0.0F);
         mob.setNoAi(true);
+        anchorTestMob(mob);
         mob.setPersistenceRequired();
         mob.setCanPickUpLoot(false);
         mob.getPersistentData().putUUID(TestMobEvents.CONTROLLER_KEY, getUUID());
         updateProxyCardName(mob);
         if (level.addFreshEntity(mob)) proxyUuid = mob.getUUID();
+    }
+
+    private void anchorTestMob(Mob mob) {
+        mob.setNoAi(true);
+        mob.setNoGravity(true);
+        mob.setRemainingFireTicks(0);
+        mob.setAirSupply(mob.getMaxAirSupply());
+        mob.setDeltaMovement(0.0D, 0.0D, 0.0D);
+        mob.fallDistance = 0.0F;
+        if (mob.distanceToSqr(this) > 0.0001D) {
+            mob.moveTo(getX(), getY(), getZ(), getYRot(), 0.0F);
+        }
+        applyRotation(mob);
     }
 
     private void updateProxyCardName(Entity proxy) {
@@ -157,6 +193,7 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         proxyUuid = null;
         respawnTicks = 0;
         missingProxyTicks = 0;
+        waitingForDeathRemoval = false;
     }
 
     @Override
@@ -221,17 +258,57 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         return getModelMode() == DummyMobCatalog.HOSTILE_MOBS ? entityData.get(HOSTILE_MOB) : entityData.get(PASSIVE_MOB);
     }
 
+    public int getFacingIndex() { return entityData.get(FACING); }
+    public String getFacingName() {
+        return switch (getFacingIndex()) {
+            case 1 -> "EAST";
+            case 2 -> "SOUTH";
+            case 3 -> "WEST";
+            default -> "NORTH";
+        };
+    }
+    public void setFacingIndex(int requestedFacing) {
+        entityData.set(FACING, Math.floorMod(requestedFacing, 4));
+        applyRotation(this);
+        if (proxyUuid != null && level() instanceof ServerLevel serverLevel
+                && serverLevel.getEntity(proxyUuid) instanceof Mob mob) {
+            applyRotation(mob);
+        }
+    }
+    private void applyRotation(Mob mob) {
+        float yaw = switch (getFacingIndex()) {
+            case 1 -> -90.0F;
+            case 2 -> 0.0F;
+            case 3 -> 90.0F;
+            default -> 180.0F;
+        };
+        mob.setYRot(yaw);
+        mob.setYHeadRot(yaw);
+        mob.setYBodyRot(yaw);
+    }
+
     public void setModelMode(int requestedMode) {
         int next = Math.max(DummyMobCatalog.IMMORTAL_STEVE, Math.min(DummyMobCatalog.HOSTILE_MOBS, requestedMode));
-        if (next == getModelMode()) return;
-        discardProxy();
+        if (next != getModelMode()) discardProxy();
         entityData.set(MODEL_MODE, next);
-        boolean steve = next == DummyMobCatalog.IMMORTAL_STEVE;
+        applyModelState(next);
+    }
+
+    private void applyModelState(int mode) {
+        boolean steve = mode == DummyMobCatalog.IMMORTAL_STEVE;
         setInvisible(!steve);
         setInvulnerable(!steve);
-        setNoGravity(!steve);
-        noPhysics = !steve;
+        setNoGravity(true);
+        noPhysics = false;
+        setDeltaMovement(0.0D, 0.0D, 0.0D);
+        fallDistance = 0.0F;
         if (steve) setHealth(getMaxHealth());
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> accessor) {
+        super.onSyncedDataUpdated(accessor);
+        if (MODEL_MODE.equals(accessor)) applyModelState(getModelMode());
     }
 
     public void setSelectedMob(String mobId) {
@@ -294,6 +371,7 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         tag.putBoolean("InfoCardEnabled", isInfoCardEnabled());
         tag.putInt("LoadoutIndex", getLoadoutIndex());
         tag.putInt("ModelMode", getModelMode());
+        tag.putInt("Facing", getFacingIndex());
         tag.putString("PassiveMob", entityData.get(PASSIVE_MOB));
         tag.putString("HostileMob", entityData.get(HOSTILE_MOB));
         if (proxyUuid != null) tag.putUUID("ProxyUuid", proxyUuid);
@@ -314,11 +392,8 @@ public class TargetDummy extends PathfinderMob implements MenuProvider {
         if (tag.contains("HostileMob") && DummyMobCatalog.HOSTILE.contains(tag.getString("HostileMob"))) entityData.set(HOSTILE_MOB, tag.getString("HostileMob"));
         int mode = Math.max(DummyMobCatalog.IMMORTAL_STEVE, Math.min(DummyMobCatalog.HOSTILE_MOBS, tag.getInt("ModelMode")));
         entityData.set(MODEL_MODE, mode);
-        boolean steve = mode == DummyMobCatalog.IMMORTAL_STEVE;
-        setInvisible(!steve);
-        setInvulnerable(!steve);
-        setNoGravity(!steve);
-        noPhysics = !steve;
+        applyModelState(mode);
+        setFacingIndex(tag.contains("Facing") ? tag.getInt("Facing") : 0);
         if (tag.hasUUID("ProxyUuid")) proxyUuid = tag.getUUID("ProxyUuid");
     }
 

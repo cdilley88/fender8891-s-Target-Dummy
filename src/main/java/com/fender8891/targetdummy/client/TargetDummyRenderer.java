@@ -30,8 +30,9 @@ public class TargetDummyRenderer extends HumanoidMobRenderer<TargetDummy, Humano
     @Override
     public void render(TargetDummy entity, float yaw, float partialTicks, PoseStack poseStack,
             MultiBufferSource buffer, int light) {
+        if (entity.getModelMode() != com.fender8891.targetdummy.entity.DummyMobCatalog.IMMORTAL_STEVE) return;
         super.render(entity, yaw, partialTicks, poseStack, buffer, light);
-        if (!entity.isInfoCardEnabled() || entity.getModelMode() != com.fender8891.targetdummy.entity.DummyMobCatalog.IMMORTAL_STEVE) return;
+        if (!entity.isInfoCardEnabled()) return;
         poseStack.pushPose();
         poseStack.translate(0.0D, entity.getBbHeight() + 0.85D, 0.0D);
         poseStack.mulPose(entityRenderDispatcher.cameraOrientation());

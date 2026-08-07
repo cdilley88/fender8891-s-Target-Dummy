@@ -3,6 +3,7 @@ package com.fender8891.targetdummy.client;
 import com.fender8891.targetdummy.entity.DummyMobCatalog;
 import com.fender8891.targetdummy.entity.TargetDummy;
 import com.fender8891.targetdummy.inventory.TargetDummyMenu;
+import com.fender8891.targetdummy.network.TargetDummyFacingPayload;
 import com.fender8891.targetdummy.network.TargetDummyInfoCardPayload;
 import com.fender8891.targetdummy.network.TargetDummyLoadoutPayload;
 import com.fender8891.targetdummy.network.TargetDummyModelPayload;
@@ -33,6 +34,7 @@ public class TargetDummyScreen extends AbstractContainerScreen<TargetDummyMenu> 
     private Button modeButton;
     private Button presetButton;
     private Button infoCardButton;
+    private Button facingButton;
     private Button previousPageButton;
     private Button nextPageButton;
     private int mobPage;
@@ -55,17 +57,24 @@ public class TargetDummyScreen extends AbstractContainerScreen<TargetDummyMenu> 
             int next = (menu.getModelMode() + 1) % 3;
             sendModel(next, "");
         }).bounds(leftPos + 200, topPos + 37, 88, 20).build());
+        facingButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
+            int entityId = menu.getDummyEntityId();
+            if (entityId >= 0) {
+                int next = (menu.getFacingIndex() + 1) % 4;
+                PacketDistributor.sendToServer(new TargetDummyFacingPayload(entityId, next));
+            }
+        }).bounds(leftPos + 200, topPos + 61, 88, 20).build());
 
         modeButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             int current = menu.getLoadoutIndex();
             sendLoadout(current == TargetDummy.CUSTOM_LOADOUT ? TargetDummy.FIRST_PRESET : TargetDummy.CUSTOM_LOADOUT);
-        }).bounds(leftPos + 200, topPos + 82, 88, 20).build());
+        }).bounds(leftPos + 200, topPos + 93, 88, 20).build());
 
         presetButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             int next = menu.getLoadoutIndex() + 1;
             if (next > TargetDummy.LAST_PRESET) next = TargetDummy.FIRST_PRESET;
             sendLoadout(next);
-        }).bounds(leftPos + 200, topPos + 106, 88, 20).build());
+        }).bounds(leftPos + 200, topPos + 117, 88, 20).build());
 
         infoCardButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             int entityId = menu.getDummyEntityId();
@@ -112,6 +121,7 @@ public class TargetDummyScreen extends AbstractContainerScreen<TargetDummyMenu> 
         }
         boolean steve = modelMode == DummyMobCatalog.IMMORTAL_STEVE;
         modelButton.setMessage(Component.literal(menu.getModelModeName()));
+        facingButton.setMessage(Component.literal("FACING: " + menu.getFacingName()));
         modeButton.visible = steve;
         modeButton.active = steve;
         modeButton.setMessage(Component.literal(menu.getLoadoutIndex() == TargetDummy.CUSTOM_LOADOUT ? "CUSTOM" : "PRESET"));
@@ -165,7 +175,7 @@ public class TargetDummyScreen extends AbstractContainerScreen<TargetDummyMenu> 
         if (steve) {
             graphics.drawString(font, "ARMOR", leftPos + 18, topPos + 37, 0xFF72E6F0, false);
             graphics.drawString(font, "HANDS", leftPos + 102, topPos + 37, 0xFFFFB654, false);
-            graphics.drawString(font, "LOADOUT MODE", leftPos + 203, topPos + 69, 0xFFFFC978, false);
+            graphics.drawString(font, "LOADOUT MODE", leftPos + 203, topPos + 83, 0xFFFFC978, false);
             for (int i = 0; i < 6; i++) {
                 var slot = menu.slots.get(i);
                 if (slot.isActive()) drawSlot(graphics, leftPos + slot.x, topPos + slot.y, i < 4 ? CYAN : ORANGE);
@@ -181,9 +191,9 @@ public class TargetDummyScreen extends AbstractContainerScreen<TargetDummyMenu> 
             List<String> entries = DummyMobCatalog.entries(menu.getModelMode());
             int pages = Math.max(1, (entries.size() + MOBS_PER_PAGE - 1) / MOBS_PER_PAGE);
             graphics.drawCenteredString(font, "PAGE " + (mobPage + 1) + "/" + pages, leftPos + 103, topPos + 150, 0xFF8EA0B4);
-            graphics.drawString(font, "NATIVE STATS", leftPos + 207, topPos + 75, 0xFF62E889, false);
-            graphics.drawString(font, "AI DISABLED", leftPos + 207, topPos + 91, 0xFF8EA0B4, false);
-            graphics.drawString(font, "RESPAWN 1.0s", leftPos + 207, topPos + 107, 0xFF8EA0B4, false);
+            graphics.drawString(font, "NATIVE STATS", leftPos + 207, topPos + 89, 0xFF62E889, false);
+            graphics.drawString(font, "AI DISABLED", leftPos + 207, topPos + 103, 0xFF8EA0B4, false);
+            graphics.drawString(font, "RESPAWN 1.0s", leftPos + 207, topPos + 117, 0xFF8EA0B4, false);
         }
 
         for (int i = 6; i < menu.slots.size(); i++) {

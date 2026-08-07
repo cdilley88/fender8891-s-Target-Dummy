@@ -22,6 +22,8 @@ public final class TargetDummyMod {
         modEventBus.addListener(this::addCreativeTabContents);
         modEventBus.addListener(TargetDummyNetworking::registerPayloads);
         NeoForge.EVENT_BUS.addListener(TestMobEvents::onEntityInteract);
+        NeoForge.EVENT_BUS.addListener(TestMobEvents::onIncomingDamage);
+        NeoForge.EVENT_BUS.addListener(TestMobEvents::onMobDespawn);
         NeoForge.EVENT_BUS.addListener(TestMobEvents::onLivingDrops);
         NeoForge.EVENT_BUS.addListener(TestMobEvents::onLivingExperienceDrop);
     }

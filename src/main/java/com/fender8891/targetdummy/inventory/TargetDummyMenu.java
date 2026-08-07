@@ -77,6 +77,8 @@ public class TargetDummyMenu extends AbstractContainerMenu {
     public String getSelectedMobId() { return dummy == null ? "" : dummy.getSelectedMobId(); }
     public int getLoadoutIndex() { return dummy == null ? TargetDummy.CUSTOM_LOADOUT : dummy.getLoadoutIndex(); }
     public String getLoadoutName() { return dummy == null ? "CUSTOM" : dummy.getLoadoutName(); }
+    public int getFacingIndex() { return dummy == null ? 0 : dummy.getFacingIndex(); }
+    public String getFacingName() { return dummy == null ? "NORTH" : dummy.getFacingName(); }
     public int getDummyEntityId() { return dummy == null ? -1 : dummy.getId(); }
     public void setInfoCardEnabled(boolean enabled) { if (dummy != null) dummy.setInfoCardEnabled(enabled); }
     public boolean controls(TargetDummy target) { return dummy == target; }

@@ -3,6 +3,7 @@ package com.fender8891.targetdummy.registry;
 import com.fender8891.targetdummy.entity.DummyMobCatalog;
 import com.fender8891.targetdummy.entity.TargetDummy;
 import com.fender8891.targetdummy.inventory.TargetDummyMenu;
+import com.fender8891.targetdummy.network.TargetDummyFacingPayload;
 import com.fender8891.targetdummy.network.TargetDummyInfoCardPayload;
 import com.fender8891.targetdummy.network.TargetDummyLoadoutPayload;
 import com.fender8891.targetdummy.network.TargetDummyModelPayload;
@@ -17,6 +18,7 @@ public final class TargetDummyNetworking {
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1")
                 .playToServer(TargetDummyInfoCardPayload.TYPE, TargetDummyInfoCardPayload.STREAM_CODEC, TargetDummyNetworking::handleInfoCardToggle)
+                .playToServer(TargetDummyFacingPayload.TYPE, TargetDummyFacingPayload.STREAM_CODEC, TargetDummyNetworking::handleFacingChange)
                 .playToServer(TargetDummyLoadoutPayload.TYPE, TargetDummyLoadoutPayload.STREAM_CODEC, TargetDummyNetworking::handleLoadoutChange)
                 .playToServer(TargetDummyModelPayload.TYPE, TargetDummyModelPayload.STREAM_CODEC, TargetDummyNetworking::handleModelChange);
     }
@@ -27,6 +29,14 @@ public final class TargetDummyNetworking {
                 || !(serverPlayer.containerMenu instanceof TargetDummyMenu menu)
                 || !menu.controls(dummy) || serverPlayer.distanceToSqr(dummy) >= 64.0D) return null;
         return dummy;
+    }
+
+    private static void handleFacingChange(TargetDummyFacingPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            TargetDummy dummy = controlledDummy(payload.entityId(), context);
+            if (dummy == null || payload.facing() < 0 || payload.facing() > 3) return;
+            dummy.setFacingIndex(payload.facing());
+        });
     }
 
     private static void handleInfoCardToggle(TargetDummyInfoCardPayload payload, IPayloadContext context) {
